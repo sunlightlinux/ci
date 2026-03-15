@@ -51,6 +51,7 @@ pipeline {
         stage('Download Kernel Source') {
             steps {
                 sh """
+                    rm -rf linux-sunlight linux-sunlight-${KERNEL_TAG} ${KERNEL_TAG}.tar.gz
                     wget -q --show-progress -O ${KERNEL_TAG}.tar.gz ${GITHUB_URL}
                     tar -xf ${KERNEL_TAG}.tar.gz
                     mv linux-sunlight-${KERNEL_TAG} linux-sunlight
