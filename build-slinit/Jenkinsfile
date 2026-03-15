@@ -1,0 +1,90 @@
+pipeline {
+    agent {
+        node 'debian13-1'
+    }
+
+    parameters {
+        string(
+            name: 'SLINIT_TAG',
+            defaultValue: 'v1.10.2',
+            description: 'Tag from sunlightlinux/slinit (e.g. v1.10.2)'
+        )
+    }
+
+    environment {
+        SLINIT_TAG  = "${params.SLINIT_TAG}"
+        GITHUB_URL  = "https://github.com/sunlightlinux/slinit/archive/refs/tags/${params.SLINIT_TAG}.tar.gz"
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Install Build Dependencies') {
+            steps {
+                sh '''
+                    apt-get update -y
+                    apt-get install -y \
+                        golang \
+                        wget
+                '''
+            }
+        }
+
+        stage('Download Source') {
+            steps {
+                sh """
+                    rm -rf slinit slinit-${SLINIT_TAG} slinit-${SLINIT_TAG}.tar.gz
+                    wget -q --show-progress -O slinit-${SLINIT_TAG}.tar.gz ${GITHUB_URL}
+                    tar -xf slinit-${SLINIT_TAG}.tar.gz
+                    mv slinit-\${SLINIT_TAG#v} slinit
+                """
+            }
+        }
+
+        stage('Build') {
+            steps {
+                sh '''
+                    cd slinit
+                    go build ./cmd/slinit
+                    go build ./cmd/slinitctl
+                    go build ./cmd/slinit-check
+                    go build ./cmd/slinit-monitor
+                '''
+            }
+        }
+
+        stage('Unit Tests') {
+            steps {
+                sh '''
+                    cd slinit
+                    go test ./...
+                '''
+            }
+        }
+
+        stage('Archive Artifacts') {
+            steps {
+                archiveArtifacts artifacts: 'slinit/slinit, slinit/slinitctl, slinit/slinit-check, slinit/slinit-monitor', fingerprint: true
+            }
+        }
+
+        stage('Cleanup') {
+            steps {
+                cleanWs()
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "slinit ${SLINIT_TAG} built successfully."
+        }
+        failure {
+            echo "slinit build failed. Check logs: ${env.BUILD_URL}"
+        }
+    }
+}
