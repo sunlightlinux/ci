@@ -1,0 +1,102 @@
+pipeline {
+    agent {
+        node 'debian13-1'
+    }
+
+    parameters {
+        string(
+            name: 'KERNEL_TAG',
+            defaultValue: '6.19.8-lowlatency-sunlight1',
+            description: 'Tag from sunlightlinux/linux-sunlight (e.g. 6.19.8-lowlatency-sunlight1)'
+        )
+    }
+
+    environment {
+        KERNEL_TAG  = "${params.KERNEL_TAG}"
+        GITHUB_URL  = "https://github.com/sunlightlinux/linux-sunlight/archive/refs/tags/${params.KERNEL_TAG}.tar.gz"
+        JOBS        = "${sh(script: 'nproc', returnStdout: true).trim()}"
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Install Build Dependencies') {
+            steps {
+                sh '''
+                    apt-get update -y
+                    apt-get install -y \
+                        build-essential \
+                        libncurses-dev \
+                        bison \
+                        flex \
+                        libssl-dev \
+                        libelf-dev \
+                        cargo \
+                        bc \
+                        gawk \
+                        rsync \
+                        dwarves \
+                        debhelper \
+                        fakeroot \
+                        wget \
+                        ccache
+                '''
+            }
+        }
+
+        stage('Download Kernel Source') {
+            steps {
+                sh """
+                    wget -q --show-progress -O ${KERNEL_TAG}.tar.gz ${GITHUB_URL}
+                    tar -xf ${KERNEL_TAG}.tar.gz
+                    mv linux-sunlight-${KERNEL_TAG} linux-sunlight
+                """
+            }
+        }
+
+        stage('Configure Kernel') {
+            steps {
+                sh """
+                    cd linux-sunlight
+                    cp sunlight/gcc/config-sunlight-lowlatency .config
+                    make olddefconfig ARCH=x86_64
+                """
+            }
+        }
+
+        stage('Build Kernel') {
+            steps {
+                sh """
+                    cd linux-sunlight
+                    export PATH="/usr/lib/ccache:${PATH}"
+                    make -j${JOBS} bindeb-pkg ARCH=x86_64 CC="ccache gcc" HOSTCC="ccache gcc"
+                """
+            }
+        }
+
+        stage('Archive Artifacts') {
+            steps {
+                archiveArtifacts artifacts: '*.deb', fingerprint: true
+            }
+        }
+
+        stage('Cleanup') {
+            steps {
+                cleanWs()
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "Kernel ${KERNEL_TAG} built successfully."
+        }
+        failure {
+            echo "Kernel build failed. Check logs: ${env.BUILD_URL}"
+        }
+    }
+}
