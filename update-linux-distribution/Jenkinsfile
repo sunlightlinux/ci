@@ -1,0 +1,46 @@
+pipeline {
+    agent none
+
+    triggers {
+        cron('H */11 * * *')
+    }
+
+    stages {
+        stage('Run on All Nodes') {
+            matrix {
+                axes {
+                    axis {
+                        name 'NODE'
+                        values 'debian13-1', 'debian13-2'
+                    }
+                }
+                agent {
+                    node "${NODE}"
+                }
+                stages {
+                    stage('Checkout') {
+                        steps {
+                            checkout scm
+                        }
+                    }
+
+                    stage('Update Linux Distribution') {
+                        steps {
+                            script {
+                                echo "Node Execution: ${env.NODE_NAME}"
+
+                                sh 'apt-get update -y && apt-get upgrade -qy'
+                            }
+                        }
+                    }
+
+                    stage('Cleanup After') {
+                        steps {
+                            cleanWs()
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
