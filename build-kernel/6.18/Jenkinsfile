@@ -75,13 +75,15 @@ pipeline {
                     cd linux-sunlight
                     export PATH="/usr/lib/ccache:${PATH}"
                     make -j${JOBS} bindeb-pkg ARCH=x86_64 CC="ccache gcc" HOSTCC="ccache gcc"
+                    make -j${JOBS} tar-pkg ARCH=x86_64 CC="ccache gcc" HOSTCC="ccache gcc"
+                    mv linux-*.tar ..
                 """
             }
         }
 
         stage('Archive Artifacts') {
             steps {
-                archiveArtifacts artifacts: '*.deb', fingerprint: true
+                archiveArtifacts artifacts: '*.deb, *.tar, *.tar.gz', fingerprint: true
             }
         }
 
