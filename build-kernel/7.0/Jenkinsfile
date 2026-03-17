@@ -6,8 +6,8 @@ pipeline {
     parameters {
         string(
             name: 'KERNEL_TAG',
-            defaultValue: '7.0.0-rc3-lowlatency-sunlight1',
-            description: 'Tag from sunlightlinux/linux-sunlight (e.g. 7.0.0-rc3-lowlatency-sunlight1)'
+            defaultValue: '7.0.0-rc4-lowlatency-sunlight1',
+            description: 'Tag from sunlightlinux/linux-sunlight (e.g. 7.0.0-rc4-lowlatency-sunlight1)'
         )
     }
 
