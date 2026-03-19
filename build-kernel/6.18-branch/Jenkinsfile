@@ -1,0 +1,113 @@
+pipeline {
+    agent {
+        node 'debian13-1'
+    }
+
+    parameters {
+        string(
+            name: 'KERNEL_BRANCH',
+            defaultValue: '6.18',
+            description: 'Branch from sunlightlinux/linux-sunlight (e.g. 6.18)'
+        )
+        string(
+            name: 'GIT_DEPTH',
+            defaultValue: '1',
+            description: 'Shallow clone depth (1 = latest commit only, 0 = full history)'
+        )
+    }
+
+    environment {
+        KERNEL_BRANCH = "${params.KERNEL_BRANCH}"
+        GIT_DEPTH     = "${params.GIT_DEPTH}"
+        GITHUB_URL    = "https://github.com/sunlightlinux/linux-sunlight.git"
+        JOBS          = "${sh(script: 'nproc', returnStdout: true).trim()}"
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Install Build Dependencies') {
+            steps {
+                sh '''
+                    apt-get update -y
+                    apt-get install -y \
+                        build-essential \
+                        libncurses-dev \
+                        bison \
+                        flex \
+                        libssl-dev \
+                        libelf-dev \
+                        cargo \
+                        bc \
+                        gawk \
+                        rsync \
+                        dwarves \
+                        debhelper \
+                        fakeroot \
+                        git \
+                        ccache
+                '''
+            }
+        }
+
+        stage('Clone Kernel Source') {
+            steps {
+                sh """
+                    rm -rf linux-sunlight
+                    if [ "${GIT_DEPTH}" = "0" ]; then
+                        git clone --branch ${KERNEL_BRANCH} ${GITHUB_URL} linux-sunlight
+                    else
+                        git clone --branch ${KERNEL_BRANCH} --depth ${GIT_DEPTH} ${GITHUB_URL} linux-sunlight
+                    fi
+                """
+            }
+        }
+
+        stage('Configure Kernel') {
+            steps {
+                sh """
+                    cd linux-sunlight
+                    cp sunlight/gcc/config-sunlight-lowlatency .config
+                    make olddefconfig ARCH=x86_64
+                """
+            }
+        }
+
+        stage('Build Kernel') {
+            steps {
+                sh """
+                    cd linux-sunlight
+                    export PATH="/usr/lib/ccache:\${PATH}"
+                    make -j${JOBS} bindeb-pkg ARCH=x86_64 CC="ccache gcc" HOSTCC="ccache gcc"
+                    make -j${JOBS} tar-pkg ARCH=x86_64 CC="ccache gcc" HOSTCC="ccache gcc"
+                    mv linux-*.tar ..
+                """
+            }
+        }
+
+        stage('Archive Artifacts') {
+            steps {
+                archiveArtifacts artifacts: '*.deb, *.tar, *.tar.gz', fingerprint: true
+            }
+        }
+
+        stage('Cleanup') {
+            steps {
+                cleanWs()
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "Kernel branch ${KERNEL_BRANCH} (depth: ${GIT_DEPTH}) built successfully."
+        }
+        failure {
+            echo "Kernel build failed. Check logs: ${env.BUILD_URL}"
+        }
+    }
+}
