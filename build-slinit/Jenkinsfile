@@ -6,8 +6,8 @@ pipeline {
     parameters {
         string(
             name: 'SLINIT_TAG',
-            defaultValue: 'v1.10.6',
-            description: 'Tag from sunlightlinux/slinit (e.g. v1.10.6)'
+            defaultValue: 'v1.10.7',
+            description: 'Tag from sunlightlinux/slinit (e.g. v1.10.7)'
         )
     }
 
